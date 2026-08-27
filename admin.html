@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Control Room</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <h1>Admin Control Room</h1>
+  <div id="streams"></div>
+
+  <script>
+    const socket = io();
+    socket.emit("join-admin");
+
+    socket.on("offer", async ({ offer, clientId }) => {
+      const peerConnection = new RTCPeerConnection();
+
+      peerConnection.ontrack = (event) => {
+        const video = document.createElement("video");
+        video.autoplay = true;
+        video.playsinline = true;
+        video.srcObject = event.streams[0];
+        document.getElementById("streams").appendChild(video);
+      };
+
+      await peerConnection.setRemoteDescription(offer);
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
+      socket.emit("answer", { answer, clientId });
+    });
+  </script>
+</body>
+</html>
