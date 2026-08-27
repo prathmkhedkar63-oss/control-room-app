@@ -3,10 +3,88 @@
 <head>
   <title>Control Room App</title>
   <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-  <h1>Welcome to Control Room App</h1>
-  <p><a href="/mobile.html">📱 Mobile Camera Stream</a></p>
-  <p><a href="/admin.html">💻 Admin Control Room</a></p>
+  <h1>Control Room App</h1>
+
+  <div id="role-select">
+    <button id="mobile-btn">📱 I am Mobile (Streamer)</button>
+    <button id="admin-btn">💻 I am Admin (Viewer)</button>
+  </div>
+
+  <div id="mobile-view" style="display:none;">
+    <h2>Mobile Camera Stream</h2>
+    <button id="start-btn">Start Streaming</button>
+    <div id="mobile-preview"></div>
+  </div>
+
+  <div id="admin-view" style="display:none;">
+    <h2>Admin Control Room</h2>
+    <div id="streams"></div>
+  </div>
+
+  <script>
+    const socket = io();
+    let peerConnection;
+
+    // Role selection
+    document.getElementById("mobile-btn").onclick = () => {
+      document.getElementById("role-select").style.display = "none";
+      document.getElementById("mobile-view").style.display = "block";
+    };
+
+    document.getElementById("admin-btn").onclick = () => {
+      document.getElementById("role-select").style.display = "none";
+      document.getElementById("admin-view").style.display = "block";
+    };
+
+    // Mobile logic
+    document.getElementById("start-btn").addEventListener("click", async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+      // Show local preview
+      const localVideo = document.createElement("video");
+      localVideo.autoplay = true;
+      localVideo.playsinline = true;
+      localVideo.srcObject = stream;
+      document.getElementById("mobile-preview").appendChild(localVideo);
+
+      peerConnection = new RTCPeerConnection();
+      stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+
+      socket.emit("offer", { offer });
+    });
+
+    socket.on("answer", async (answer) => {
+      if (peerConnection) {
+        await peerConnection.setRemoteDescription(answer);
+      }
+    });
+
+    // Admin logic
+    socket.on("offer", async ({ offer, clientId }) => {
+      if (document.getElementById("admin-view").style.display === "block") {
+        const peerConnection = new RTCPeerConnection();
+
+        peerConnection.ontrack = (event) => {
+          const video = document.createElement("video");
+          video.autoplay = true;
+          video.playsinline = true;
+          video.srcObject = event.streams[0];
+          document.getElementById("streams").appendChild(video);
+        };
+
+        await peerConnection.setRemoteDescription(offer);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        socket.emit("answer", { answer, clientId });
+      }
+    });
+  </script>
 </body>
 </html>
