@@ -1,34 +1,43 @@
 const express = require("express");
+const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
-const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Serve static files
+const PORT = process.env.PORT || 3000;
+
+// Serve static files from public folder
 app.use(express.static(path.join(__dirname, "public")));
 
+// Root route → index.html
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// WebRTC signaling
 io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
+  console.log("New client connected:", socket.id);
 
-  // Mobile sends offer
-  socket.on("offer", (data) => {
-    io.to("admin-room").emit("offer", { offer: data.offer, clientId: socket.id });
+  socket.on("offer", ({ offer }) => {
+    socket.broadcast.emit("offer", { offer, clientId: socket.id });
   });
 
-  // Admin sends answer
-  socket.on("answer", (data) => {
-    io.to(data.clientId).emit("answer", data.answer);
+  socket.on("answer", ({ answer, clientId }) => {
+    io.to(clientId).emit("answer", answer);
   });
 
-  // Admin joins special room
   socket.on("join-admin", () => {
-    socket.join("admin-room");
-    console.log("Admin joined control room");
+    console.log("Admin joined");
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
